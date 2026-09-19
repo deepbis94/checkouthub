@@ -4,6 +4,7 @@ import { deliverOutboundWebhook } from './jobs/outboundWebhook.js';
 import { renewSubscription } from './jobs/renewSubscription.js';
 import { probeGateways } from './jobs/probeGateways.js';
 import { expireCheckouts } from './jobs/expireCheckouts.js';
+import { reconcileCharge } from './jobs/reconcileCharge.js';
 
 const connection = new IORedis({
   host: process.env.REDIS_HOST ?? '127.0.0.1',
@@ -18,6 +19,7 @@ const queues = {
   renewals: new Queue('subscriptions.renew', { connection, prefix }),
   probes: new Queue('gateways.probe', { connection, prefix }),
   expiry: new Queue('checkouts.expire', { connection, prefix }),
+  reconcile: new Queue('charges.reconcile', { connection, prefix }),
 };
 
 const processors = {
@@ -25,6 +27,7 @@ const processors = {
   'subscriptions.renew': renewSubscription,
   'gateways.probe': probeGateways,
   'checkouts.expire': expireCheckouts,
+  'charges.reconcile': reconcileCharge,
 };
 
 const workers = Object.entries(processors).map(([name, processor]) => {
@@ -105,6 +108,9 @@ promoteLaravelJobs('checkouthub:jobs:webhooks.outbound', queues.webhooks).catch(
 });
 promoteLaravelJobs('checkouthub:jobs:subscriptions.renew', queues.renewals).catch((err) => {
   console.error(JSON.stringify({ msg: 'promote_renewals_failed', err: err.message }));
+});
+promoteLaravelJobs('checkouthub:jobs:charges.reconcile', queues.reconcile).catch((err) => {
+  console.error(JSON.stringify({ msg: 'promote_reconcile_failed', err: err.message }));
 });
 
 console.log(JSON.stringify({ msg: 'worker_started', queues: Object.keys(processors) }));

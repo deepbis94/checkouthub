@@ -37,6 +37,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/gateways/probe', [InternalGatewayController::class, 'probe']);
         Route::post('/gateways/{gateway}/circuit', [InternalGatewayController::class, 'circuit']);
         Route::post('/checkouts/expire', [InternalCheckoutController::class, 'expire']);
+        Route::post('/checkouts/reconcile', [InternalCheckoutController::class, 'reconcile']);
         Route::post('/subscriptions/renew', [InternalSubscriptionController::class, 'renew']);
     });
 });

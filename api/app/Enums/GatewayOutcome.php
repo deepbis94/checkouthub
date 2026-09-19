@@ -9,4 +9,6 @@ enum GatewayOutcome: string
     case SoftDecline = 'soft_decline';
     case Failover = 'failover';
     case Skipped = 'skipped';
+    case Ambiguous = 'ambiguous';
+    case PendingReview = 'pending_review';
 }

@@ -3,8 +3,8 @@
 namespace App\Domain\Checkout;
 
 use App\Enums\CheckoutState;
-use App\Exceptions\IllegalCheckoutTransitionException;
 use App\Exceptions\ConcurrentCheckoutTransitionException;
+use App\Exceptions\IllegalCheckoutTransitionException;
 use App\Models\Checkout;
 use App\Models\CheckoutTransition;
 use App\Support\Correlation;
@@ -19,8 +19,15 @@ final class CheckoutStateMachine
             CheckoutState::Authorizing->value,
             CheckoutState::Expired->value,
             CheckoutState::Failed->value,
+            CheckoutState::PendingReview->value,
         ],
         CheckoutState::Authorizing->value => [
+            CheckoutState::Complete->value,
+            CheckoutState::Failed->value,
+            CheckoutState::Expired->value,
+            CheckoutState::PendingReview->value,
+        ],
+        CheckoutState::PendingReview->value => [
             CheckoutState::Complete->value,
             CheckoutState::Failed->value,
             CheckoutState::Expired->value,

@@ -14,15 +14,15 @@ flowchart LR
   API <--> R[(Redis 7<br/>locks / buckets / circuits / BullMQ)]
   API <--> DB[(MySQL 8)]
   W[Node 20 workers] <--> R
-  W -->|probes / expiry / renewals| API
+  W -->|probes / expiry / renewals / reconcile| API
 ```
 
 Charge path:
 
 1. `POST /api/v1/checkouts` freezes an offer snapshot (trial, upsells, discount, proration) and TTL.
-2. `POST /api/v1/checkouts/{id}/complete` transitions `pending -> authorizing -> complete|failed`.
+2. `POST /api/v1/checkouts/{id}/complete` transitions `pending -> authorizing -> complete|failed|pending_review`.
 3. `SET lock:charge:{checkoutId} NX PX` so a checkout cannot be charged twice.
-4. Gateways are tried in priority order; open circuits and hard failures failover atomically.
+4. Gateways are tried in priority order; open circuits and **unambiguous** hard failures failover atomically. Ambiguous timeouts are reconciled against the same gateway before any failover.
 5. Success creates a subscription and enqueues an outbound webhook (`Idempotency-Key`).
 
 ## Layout
@@ -80,6 +80,22 @@ docker compose exec app php artisan checkouthub:try-charge
 docker compose exec app php artisan checkouthub:circuit stripe closed
 ```
 
+## Failure modes
+
+A lost response is not the same as a failed charge. Per-gateway `Idempotency-Key` headers only protect retries to the **same** provider; failing over to Razorpay after a Stripe timeout can double-charge if Stripe actually captured the payment.
+
+Before any gateway call, CheckoutHub persists `charge_ref = ch_{checkoutId}` on every `gateway_events` row (including circuit/rate-limit skips). Retries of the same completion reuse that reference. `ChargeLock` still enforces one in-flight attempt per checkout.
+
+| Class | Examples | Action |
+|---|---|---|
+| Unambiguous | DNS failure, connection refused, HTTP 5xx that never accepted the request, card decline at the HTTP layer | Fail over immediately to the next gateway |
+| Ambiguous | Read timeout, write timeout mid-request, any disconnect after the provider may have accepted the charge | Call `fetchCharge(charge_ref)` once on the **same** adapter (~3s) |
+| Reconciled success | Provider returns the charge for `charge_ref` | Treat as success (`failover_reason=reconciled_after_timeout`). Do not fail over. |
+| Reconciled not found | Provider 404 / empty list for the reference | Safe to fail over (`failover_reason=reconciled_not_found`) |
+| Inconclusive | Reconciliation itself times out or is indeterminate | **Do not fail over.** Park checkout in `pending_review`, throw `AmbiguousChargeException`, enqueue `charges.reconcile` with exponential backoff. A delayed checkout is acceptable; a possible double charge is not. |
+
+The worker retries `fetchCharge` until the provider reports success (complete the checkout) or a definitive miss (fail the checkout). `ChargeLock`, inbound webhook idempotency, and circuit-breaker semantics are unchanged.
+
 ## Tests
 
 Redis must be reachable (`docker compose up -d redis`).
@@ -92,7 +108,7 @@ docker run --rm --network checkouthub_default \
   composer:2 php vendor/bin/pest
 ```
 
-Pest covers failover, circuit breaker, token bucket, checkout idempotency, pricing, completion, expiry sweep, and inbound webhook HMAC/dedupe.
+Pest covers failover, ambiguous-timeout reconciliation, circuit breaker, token bucket, checkout idempotency, pricing, completion, expiry sweep, and inbound webhook HMAC/dedupe.
 
 ## Redis keys
 
@@ -107,7 +123,7 @@ Pest covers failover, circuit breaker, token bucket, checkout idempotency, prici
 | `tb:{bucket}` | token bucket hash |
 | `lock:charge:{checkoutId}` | charge mutex |
 | `idem:checkout:{storeId}:{key}` | checkout create idempotency |
-| `checkouthub:jobs:*` | Laravel → worker job lists |
+| `checkouthub:jobs:*` | Laravel → worker job lists (`webhooks.outbound`, `charges.reconcile`, …) |
 
 ## API
 
@@ -123,5 +139,7 @@ Pest covers failover, circuit breaker, token bucket, checkout idempotency, prici
 | `GET` | `/api/v1/subscriptions` | `X-Api-Key` |
 | `GET` | `/api/v1/gateway-events` | `X-Api-Key` |
 | `POST` | `/api/v1/internal/gateways/probe` | worker bearer token |
+| `POST` | `/api/v1/internal/gateways/{gateway}/circuit` | worker bearer token |
 | `POST` | `/api/v1/internal/checkouts/expire` | worker bearer token |
+| `POST` | `/api/v1/internal/checkouts/reconcile` | worker bearer token |
 | `POST` | `/api/v1/internal/subscriptions/renew` | worker bearer token |

@@ -19,10 +19,12 @@ return new class extends Migration
             $table->string('outcome', 32);
             $table->string('failover_reason')->nullable();
             $table->string('charge_id')->nullable();
+            $table->string('charge_ref', 64)->nullable();
             $table->json('meta')->nullable();
             $table->timestamps();
 
             $table->index('checkout_id');
+            $table->index('charge_ref');
             $table->index(['gateway', 'created_at']);
         });
     }

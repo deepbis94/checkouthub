@@ -2,7 +2,9 @@
 
 namespace App\Services;
 
+use App\Domain\Checkout\CheckoutStateMachine;
 use App\Enums\CheckoutState;
+use App\Exceptions\AmbiguousChargeException;
 use App\Exceptions\CheckoutExpiredException;
 use App\Exceptions\ConcurrentChargeException;
 use App\Exceptions\ConcurrentCheckoutTransitionException;
@@ -13,7 +15,7 @@ use App\Models\Checkout;
 use App\Models\GatewayEvent;
 use App\Models\Store;
 use App\Models\Subscription;
-use App\Domain\Checkout\CheckoutStateMachine;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -37,6 +39,10 @@ final class CheckoutCompletionService
             return $checkout->load(['lineItems', 'transitions', 'gatewayEvents']);
         }
 
+        if ($checkout->state === CheckoutState::PendingReview) {
+            return $this->finishPendingReview($checkout);
+        }
+
         $this->expireIfNeeded($checkout);
 
         if ($checkout->state === CheckoutState::Expired) {
@@ -56,6 +62,10 @@ final class CheckoutCompletionService
                 if ($checkout->state === CheckoutState::Complete) {
                     return $checkout->load(['lineItems', 'transitions', 'gatewayEvents']);
                 }
+
+                if ($checkout->state === CheckoutState::PendingReview) {
+                    return $this->finishPendingReview($checkout);
+                }
             }
         }
 
@@ -64,6 +74,10 @@ final class CheckoutCompletionService
 
     private function authorizeAndFinish(Checkout $checkout): Checkout
     {
+        if ($checkout->state === CheckoutState::PendingReview) {
+            return $this->finishPendingReview($checkout);
+        }
+
         $dueNow = (int) ($checkout->offer_snapshot['due_now_minor'] ?? $checkout->total_minor);
         $priorSuccess = GatewayEvent::query()
             ->where('checkout_id', $checkout->id)
@@ -98,6 +112,8 @@ final class CheckoutCompletionService
                     $this->webhooks->enqueue($checkout->store, 'checkout.failed', $checkout, 'checkout-failed-'.$checkout->id);
                 }
             }
+        } catch (AmbiguousChargeException) {
+            $checkout->refresh();
         } catch (ConcurrentChargeException $e) {
             $checkout->refresh();
 
@@ -108,6 +124,25 @@ final class CheckoutCompletionService
             throw $e;
         } catch (ConcurrentCheckoutTransitionException) {
             $checkout->refresh();
+        }
+
+        return $checkout->load(['lineItems', 'transitions', 'gatewayEvents']);
+    }
+
+    private function finishPendingReview(Checkout $checkout): Checkout
+    {
+        $priorSuccess = GatewayEvent::query()
+            ->where('checkout_id', $checkout->id)
+            ->where('outcome', 'success')
+            ->latest('id')
+            ->first();
+
+        if ($priorSuccess) {
+            try {
+                $checkout = $this->markComplete($checkout, $priorSuccess->gateway, $priorSuccess->charge_id);
+            } catch (ConcurrentCheckoutTransitionException) {
+                $checkout->refresh();
+            }
         }
 
         return $checkout->load(['lineItems', 'transitions', 'gatewayEvents']);
@@ -169,7 +204,7 @@ final class CheckoutCompletionService
         }
     }
 
-    private function periodEnd(\Carbon\CarbonInterface $start, string $interval): \Carbon\CarbonInterface
+    private function periodEnd(CarbonInterface $start, string $interval): CarbonInterface
     {
         return $interval === 'year' ? $start->copy()->addYear() : $start->copy()->addMonth();
     }

@@ -17,6 +17,7 @@ class GatewayEvent extends Model
         'outcome',
         'failover_reason',
         'charge_id',
+        'charge_ref',
         'meta',
     ];
 

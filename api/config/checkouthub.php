@@ -50,6 +50,9 @@ return [
             'secret' => env('STRIPE_SECRET'),
             'simulate_failure' => (bool) env('STRIPE_SIMULATE_FAILURE', false),
             'simulate_latency_ms' => (int) env('STRIPE_SIMULATE_LATENCY_MS', 25),
+            'simulate_timeout' => (bool) env('STRIPE_SIMULATE_TIMEOUT', false),
+            'simulate_charge_succeeded' => (bool) env('STRIPE_SIMULATE_CHARGE_SUCCEEDED', false),
+            'simulate_reconcile_timeout' => (bool) env('STRIPE_SIMULATE_RECONCILE_TIMEOUT', false),
         ],
         'razorpay' => [
             'adapter' => App\Gateways\RazorpayAdapter::class,
@@ -60,6 +63,9 @@ return [
             'secret' => env('RAZORPAY_SECRET'),
             'simulate_failure' => (bool) env('RAZORPAY_SIMULATE_FAILURE', false),
             'simulate_latency_ms' => (int) env('RAZORPAY_SIMULATE_LATENCY_MS', 30),
+            'simulate_timeout' => (bool) env('RAZORPAY_SIMULATE_TIMEOUT', false),
+            'simulate_charge_succeeded' => (bool) env('RAZORPAY_SIMULATE_CHARGE_SUCCEEDED', false),
+            'simulate_reconcile_timeout' => (bool) env('RAZORPAY_SIMULATE_RECONCILE_TIMEOUT', false),
         ],
     ],
 

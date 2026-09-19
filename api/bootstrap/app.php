@@ -1,5 +1,6 @@
 <?php
 
+use App\Exceptions\AmbiguousChargeException;
 use App\Exceptions\CheckoutExpiredException;
 use App\Exceptions\ConcurrentChargeException;
 use App\Exceptions\ConcurrentCheckoutTransitionException;
@@ -32,4 +33,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->render(fn (IllegalCheckoutTransitionException $e) => response()->json(['message' => $e->getMessage()], 409));
         $exceptions->render(fn (ConcurrentChargeException $e) => response()->json(['message' => $e->getMessage()], 409));
         $exceptions->render(fn (ConcurrentCheckoutTransitionException $e) => response()->json(['message' => $e->getMessage()], 409));
+        $exceptions->render(fn (AmbiguousChargeException $e) => response()->json([
+            'message' => $e->getMessage(),
+            'checkout_id' => $e->checkoutId,
+            'state' => 'pending_review',
+        ], 409));
     })->create();

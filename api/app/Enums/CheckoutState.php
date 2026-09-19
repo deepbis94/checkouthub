@@ -9,4 +9,5 @@ enum CheckoutState: string
     case Complete = 'complete';
     case Failed = 'failed';
     case Expired = 'expired';
+    case PendingReview = 'pending_review';
 }

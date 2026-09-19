@@ -29,6 +29,12 @@ final readonly class ChargeRequest
             'currency' => $this->currency,
             'idempotency_key' => $this->idempotencyKey,
             'customer_email' => $this->customerEmail,
+            'charge_ref' => $this->chargeRef(),
         ];
+    }
+
+    public function chargeRef(): string
+    {
+        return 'ch_'.$this->checkoutId;
     }
 }

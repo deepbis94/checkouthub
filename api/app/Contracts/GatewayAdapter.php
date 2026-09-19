@@ -15,6 +15,8 @@ interface GatewayAdapter
 
     public function charge(ChargeRequest $request): ChargeResult;
 
+    public function fetchCharge(string $chargeRef): ?ChargeResult;
+
     public function refund(string $chargeId, int $amountMinor): RefundResult;
 
     public function healthProbe(): ProbeResult;
