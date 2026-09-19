@@ -86,6 +86,10 @@ await queues.renewals.add(
 const laravelPrefix = process.env.LARAVEL_REDIS_PREFIX ?? '';
 
 async function promoteLaravelJobs(listKey, queue) {
+  // At-most-once: BLPOP removes the payload before BullMQ add. A crash between
+  // pop and add drops the job. Prefer BRPOPLPUSH to a processing list, or write
+  // the outbox straight to BullMQ. Reconcile jobs can be recovered by POSTing
+  // /api/v1/internal/checkouts/reconcile.
   const key = `${laravelPrefix}${listKey}`;
   while (true) {
     const popped = await connection.blpop(key, 5);

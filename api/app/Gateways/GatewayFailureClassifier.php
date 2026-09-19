@@ -9,6 +9,10 @@ final class GatewayFailureClassifier
     /**
      * Ambiguous: the provider may have accepted the charge (timeouts, mid-request drops).
      * Unambiguous: the request never reached the provider (DNS, connection refused).
+     *
+     * Classification is substring matching on Guzzle/cURL messages ("curl error 7",
+     * "connection refused"). Those strings can vary across curl/Guzzle versions; anything
+     * unrecognized is treated as ambiguous so we reconcile instead of risking a double charge.
      */
     public static function isAmbiguous(ConnectionException $e): bool
     {

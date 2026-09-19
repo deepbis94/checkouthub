@@ -173,6 +173,11 @@ final class StripeAdapter implements GatewayAdapter
         }
     }
 
+    /**
+     * Fallback when PaymentIntents Search is unavailable. Only the 20 most recent
+     * intents are scanned — enough for demo traffic; production must use search by
+     * metadata[charge_ref], or the target intent can scroll off this page.
+     */
     private function fetchChargeByList(string $chargeRef, string $requestHash, int $started): ?ChargeResult
     {
         try {

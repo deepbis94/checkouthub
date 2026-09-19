@@ -189,6 +189,10 @@ final class RazorpayAdapter implements GatewayAdapter
         }
     }
 
+    /**
+     * Fallback when receipt lookup is empty. Only the 20 most recent payments are
+     * scanned — demo-scale; receipt / notes[charge_ref] on the order is the real path.
+     */
     private function fetchChargeFromPayments(string $chargeRef, string $checkoutId, string $requestHash, int $started): ?ChargeResult
     {
         try {
